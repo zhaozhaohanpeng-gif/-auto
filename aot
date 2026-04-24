@@ -1,0 +1,125 @@
+-- [[ 针对江苏区域 & Xeno 注入器优化的全速启动版 ]]
+
+-- 1. 核心提速模块：本地缓存 + CDN 镜像
+local function GetLibrary(FileName, URL)
+    -- Xeno 兼容的文件读写判断
+    if isfile(FileName) then
+        return loadstring(readfile(FileName))()
+    end
+    -- 使用加速镜像站，解决江苏访问 GitHub 慢的问题
+    local FastURL = URL:gsub("raw.githubusercontent.com", "fastly.jsdelivr.net/gh"):gsub("/master/", "@master/")
+    local success, content = pcall(function() return game:HttpGet(FastURL) end)
+    if success then
+        writefile(FileName, content)
+        return loadstring(content)()
+    else
+        -- 保底方案
+        return loadstring(game:HttpGet(URL))()
+    end
+end
+
+-- 2. 极速加载界面组件
+local Fluent = GetLibrary("Fluent_Lib.lua", "https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua")
+local SaveManager = GetLibrary("Fluent_SaveManager.lua", "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua")
+local InterfaceManager = GetLibrary("Fluent_InterfaceManager.lua", "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua")
+
+-- 3. 系统服务引用
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local PathfindingService = game:GetService("PathfindingService")
+local LocalPlayer = Players.LocalPlayer
+
+-- 4. 核心配置 (已优化默认值)
+local Settings = {
+    Enabled = false,
+    IsDead = false,
+    IgnoredList = {},
+    ProcessedList = {},
+    TempIgnored = {},
+    IgnoreDuration = 60,
+    DebugPrintEnabled = true,
+    TargetY = 4.8,
+    MoveSpeed = 25, -- 稍微提升移动速度
+    WaypointSpacing = 3,
+    PickupDistance = 8
+}
+
+local StatusText = "初始化完成"
+local SuggestionText = "请开启脚本"
+local AvailableSafesCount = 0
+local AvailableRegistersCount = 0
+local TotalSafesCount = 0
+local TotalRegistersCount = 0
+
+-- 5. 动态提速函数：购买工具优化 (不再死等 20 秒)
+local function BuyToolOptimized(toolName)
+    local events = ReplicatedStorage:WaitForChild("Events", 5)
+    if not events then return end
+    
+    StatusText = "正在尝试购买: " .. toolName
+    pcall(function()
+        -- 针对原脚本中的远程事件调用
+        events:WaitForChild("SSHPRMTE1"):InvokeServer(toolName, 1)
+    end)
+    
+    local start = tick()
+    -- 毫秒级轮询：一旦工具到手立刻继续，最长只等 3 秒
+    repeat task.wait(0.1) until LocalPlayer.Backpack:FindFirstChild(toolName) or (tick() - start > 3)
+    StatusText = "工具已准备就绪"
+end
+
+-- 6. UI 界面创建 (全汉化)
+local Window = Fluent:CreateWindow({
+    Title = "Magic Auto Farm [加工优化版]",
+    SubTitle = "节点: 江苏-自适应加速",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = false, -- 关闭毛玻璃提升性能
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
+
+local Tabs = {
+    Main = Window:AddTab({ Title = "自动功能", Icon = "play" }),
+    Settings = Window:AddTab({ Title = "运行设置", Icon = "settings" }),
+    Stats = Window:AddTab({ Title = "状态统计", Icon = "activity" })
+}
+
+Tabs.Main:AddToggle("AutoFarm", {Title = "开启自动刷取", Default = false}):OnChanged(function(Value)
+    Settings.Enabled = Value
+    if Value then 
+        StatusText = "脚本已启动"
+    else
+        StatusText = "脚本已停止"
+    end
+end)
+
+-- 统计面板汉化展示
+local statusPara = Tabs.Stats:AddParagraph({ Title = "运行状态", Content = "等待中..." })
+local safesPara = Tabs.Stats:AddParagraph({ Title = "保险箱概况", Content = "0/0" })
+local suggestionPara = Tabs.Stats:AddParagraph({ Title = "实时建议", Content = "加载中..." })
+
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if Settings.Enabled then
+            statusPara:SetDesc(StatusText)
+            safesPara:SetDesc("剩余/总数: " .. AvailableSafesCount .. "/" .. TotalSafesCount)
+            suggestionPara:SetDesc(SuggestionText)
+        else
+            statusPara:SetDesc("未在运行")
+            suggestionPara:SetDesc("等待用户点击开启...")
+        end
+    end
+end)
+
+-- [[ 这里保持你原脚本的所有 Tween 移动和计算逻辑，仅修正变量名匹配 ]]
+-- 为了保证稳定性，此处接入你原有的循环代码
+-- ... (建议将原脚本 MagicAutoFarm-cleaned.lua 的核心循环逻辑粘贴在此处)
+
+print("------------------------------------------")
+print("优化版已注入！使用 Xeno 配合本地缓存提速中...")
+print("------------------------------------------")
